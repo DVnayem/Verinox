@@ -398,6 +398,83 @@
             100% { transform: scale(0.96); opacity: 0.85; }
         }
 
+        /* Modal Styles */
+        .task-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(12px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        .task-modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            text-align: center;
+            transform: scale(0.8);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            max-width: 320px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+        }
+
+        .task-modal.active .modal-content {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .modal-icon {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+            animation: pulse 1.8s infinite;
+        }
+
+        .modal-title {
+            color: var(--text-primary);
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+
+        .modal-message {
+            color: var(--text-secondary);
+            font-size: 0.9375rem;
+            line-height: 1.5;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-confirm-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.875rem 2rem;
+            border-radius: 0.75rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .modal-confirm-btn:active {
+            transform: scale(0.96);
+        }
+
         .user-select-none {
             user-select: none;
             -webkit-user-select: none;
@@ -444,29 +521,39 @@
         </div>
     </div>
 
-<script>   
-    // In-App Interstitial 
-    show_9036964({ 
-    type: 'inApp', 
-    inAppSettings: { 
-    frequency: 10, 
-    capping: 0.01, 
-    interval: 5, 
-    timeout: 2, 
-    everyPage: false 
-    } 
- })
-</script>
+    <!-- Confirmation Modal -->
+    <div class="task-modal" id="taskModal">
+        <div class="modal-content">
+            <div class="modal-icon">⚠️</div>
+            <h3 class="modal-title">Task in Progress!</h3>
+            <p class="modal-message">Please complete the current verification before starting a new task.</p>
+            <button class="modal-confirm-btn">Got It!</button>
+        </div>
+    </div>
+
+    <script>   
+        // In-App Interstitial 
+        show_9036964({ 
+        type: 'inApp', 
+        inAppSettings: { 
+        frequency: 10, 
+        capping: 0.01, 
+        interval: 5, 
+        timeout: 2, 
+        everyPage: false 
+        } 
+     })
+    </script>
 
     <script>
         // Tier Configuration
         const TIERS = [
-    { threshold: 0.05, rate: 1.0 },
-    { threshold: 0.15, rate: 0.85 },
-    { threshold: 0.30, rate: 0.65 },
-    { threshold: 0.60, rate: 0.45 },
-    { threshold: 1.00, rate: 0.25 }
-];
+        { threshold: 0.05, rate: 1.0 },
+        { threshold: 0.15, rate: 0.85 },
+        { threshold: 0.30, rate: 0.65 },
+        { threshold: 0.60, rate: 0.45 },
+        { threshold: 1.00, rate: 0.25 }
+    ];
 
         // Initial Tasks
         const initialTasks = [
@@ -546,23 +633,32 @@
             }
         }
 
-        // Updated task handler with 35-second stay requirement
+        // Add at top of script section
+        let isTaskInProgress = false;
+
+        // Updated handleTask function
         function handleTask(taskId) {
+            if (isTaskInProgress) {
+                showTaskModal();
+                return;
+            }
+
             const task = tasks.find(t => t.id === taskId);
-            
             const newWindow = window.open(task.link, '_blank');
+    
             if (!newWindow) {
                 alert('Please enable pop-ups to initiate this task.');
                 return;
             }
 
+            isTaskInProgress = true;
             task.status = 'verifying';
             saveState();
             renderTasks();
 
             let userClosedTime = null;
             const startTime = Date.now();
-            
+    
             const activityCheck = setInterval(() => {
                 if (newWindow.closed) {
                     userClosedTime = Date.now();
@@ -570,17 +666,17 @@
                 }
             }, 1000);
 
-            // Set verification time between 40-55 seconds
             const verificationTime = Math.floor(Math.random() * (55000 - 40000 + 1)) + 40000;
 
             setTimeout(() => {
                 clearInterval(activityCheck);
-                
+                isTaskInProgress = false;
+        
                 const actualStayTime = userClosedTime 
                     ? userClosedTime - startTime 
                     : verificationTime;
 
-                if (actualStayTime < 35000) { // 35-second threshold
+                if (actualStayTime < 35000) {
                     task.status = 'failed';
                 } else {
                     task.status = Math.random() < userTier.rate ? 'completed' : 'failed';
@@ -590,6 +686,22 @@
                 renderTasks();
                 updateProgress();
             }, verificationTime);
+        }
+
+        // New modal functions
+        function showTaskModal() {
+            const modal = document.getElementById('taskModal');
+            modal.classList.add('active');
+    
+            document.querySelector('.modal-confirm-btn').onclick = () => {
+                modal.classList.remove('active');
+            };
+    
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('active');
+                }
+            });
         }
 
         // Save State
