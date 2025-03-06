@@ -546,14 +546,14 @@
     </script>
 
     <script>
-        // Tier Configuration
+        // Updated Tier Configuration
         const TIERS = [
-        { threshold: 0.05, rate: 1.0 },
-        { threshold: 0.15, rate: 0.85 },
-        { threshold: 0.30, rate: 0.65 },
-        { threshold: 0.60, rate: 0.45 },
-        { threshold: 1.00, rate: 0.25 }
-    ];
+            { threshold: 0.10, rate: 1.0 },   // 0-10%
+            { threshold: 0.25, rate: 0.80 },  // 10-25%
+            { threshold: 0.45, rate: 0.60 },  // 25-45%
+            { threshold: 0.70, rate: 0.40 },  // 45-70%
+            { threshold: 1.00, rate: 0.20 }   // 70-100%
+        ];
 
         // Initial Tasks
         const initialTasks = [
