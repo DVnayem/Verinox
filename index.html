@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Verinox Missions</title>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
     <script src='//whephiwums.com/sdk.js' data-zone='9036964' data-sdk='show_9036964'></script>
     <style>
         body {
@@ -772,13 +773,25 @@
             initializeUser();
             renderTasks();
             updateProgress();
-
+    
             setTimeout(() => {
                 document.querySelector('.loader').style.opacity = '0';
                 setTimeout(() => {
                     document.querySelector('.loader').style.display = 'none';
                 }, 500);
             }, 1500);
+    
+            // Telegram Mini App Integration
+            if (window.Telegram.WebApp) {
+                Telegram.WebApp.expand();
+                Telegram.WebApp.enableClosingConfirmation();
+            }
+        });
+    
+        // Prevent Window Closing
+        window.addEventListener('beforeunload', (e) => {
+            e.preventDefault();
+            e.returnValue = '';
         });
     </script>
 </body>
