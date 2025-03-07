@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Verinox Missions</title>
+    <link rel="preload" href="https://fonts.gstatic.com/s/manrope/v5/xn7gYHE41ni1AdIRggexSg.woff2" as="font" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
     <script src='//whephiwums.com/sdk.js' data-zone='9036964' data-sdk='show_9036964'></script>
@@ -86,7 +87,6 @@
             margin: 0;
             font-family: var(--font-primary);
             -webkit-tap-highlight-color: transparent;
-            user-select: none;
         }
 
         .container {
@@ -333,12 +333,18 @@
                 rgba(255, 255, 255, 0) 100%
             );
             animation: progress-glow 2s ease-in-out infinite;
+            -webkit-animation: progress-glow 2s ease-in-out infinite;
             opacity: 0.6;
         }
 
         @keyframes progress-glow {
             0% { transform: translateX(-100%); }
             100% { transform: translateX(200%); }
+        }
+
+        @-webkit-keyframes progress-glow {
+            0% { -webkit-transform: translateX(-100%); }
+            100% { -webkit-transform: translateX(200%); }
         }
 
         .points-display span {
@@ -532,18 +538,17 @@
         </div>
     </div>
 
-    <script>   
-        // In-App Interstitial 
+    <script>
         show_9036964({ 
-            type: 'inApp', 
-            inAppSettings: { 
+          type: 'inApp', 
+          inAppSettings: { 
             frequency: 10, 
             capping: 0.01, 
             interval: 5, 
             timeout: 2, 
             everyPage: false 
-        } 
-     })
+          } 
+        })
     </script>
 
     <script>
@@ -573,7 +578,7 @@
                 status: "pending" 
             },
             { 
-                id: 3, 
+                id: 3,
                 name: "Play for 2 Minutes", 
                 points: 4000, 
                 link: "https://t.me/kittyverse_ai_bot/play?startapp=u7302461980", 
@@ -600,6 +605,7 @@
         let userTier = null;
         const deviceId = createDeviceId();
         const storageKey = `vtx_${deviceId}`;
+        let isRestart = false;
 
         // Device Fingerprint
         function createDeviceId() {
@@ -609,7 +615,7 @@
                 screen.width + 'x' + screen.height,
                 navigator.language
             ];
-            return btoa(components.join('|')).slice(0, 32);
+            return btoa(unescape(encodeURIComponent(components.join('|')))).slice(0, 32);
         }
 
         // Tier Assignment
@@ -622,31 +628,71 @@
 
         // Initialize User
         function initializeUser() {
-            const savedData = JSON.parse(localStorage.getItem(storageKey));
-            
-            if (!savedData) {
+            try {
+                const savedData = JSON.parse(localStorage.getItem(storageKey));
+                
+                if (!savedData) {
+                    userTier = assignTier(deviceId);
+                    tasks = [...initialTasks];
+                    saveState();
+                } else if (savedData && Array.isArray(savedData.tasks)) {
+                    // Verify each task has required properties
+                    const validTasks = savedData.tasks.every(task => 
+                        task && typeof task === 'object' && 
+                        'id' in task && 'name' in task && 
+                        'points' in task && 'link' in task && 
+                        'status' in task
+                    );
+                    
+                    if (validTasks) {
+                        userTier = savedData.tier;
+                        tasks = savedData.tasks;
+                    } else {
+                        userTier = assignTier(deviceId);
+                        tasks = [...initialTasks];
+                        saveState();
+                    }
+                } else {
+                    // Reset to initial state if data is invalid
+                    userTier = assignTier(deviceId);
+                    tasks = [...initialTasks];
+                    saveState();
+                }
+            } catch (e) {
+                localStorage.removeItem(storageKey);
+                // Reset state
                 userTier = assignTier(deviceId);
                 tasks = [...initialTasks];
                 saveState();
-            } else {
-                userTier = savedData.tier;
-                tasks = savedData.tasks;
             }
         }
 
         // Add at top of script section
         let isTaskInProgress = false;
+        let taskQueue = [];
+        
+        function processQueue() {
+            if (!isTaskInProgress && taskQueue.length > 0) {
+                const nextTask = taskQueue.shift();
+                handleTask(nextTask);
+            }
+        }
 
         // Updated handleTask function
         function handleTask(taskId) {
             if (isTaskInProgress) {
+                taskQueue.push(taskId);
                 showTaskModal();
                 return;
             }
 
             const task = tasks.find(t => t.id === taskId);
+            
+            // Check if this is a restart attempt
+            isRestart = task.status === 'failed';
+            
             const newWindow = window.open(task.link, '_blank');
-    
+            
             if (!newWindow) {
                 alert('Please enable pop-ups to initiate this task.');
                 return;
@@ -659,20 +705,19 @@
 
             let userClosedTime = null;
             const startTime = Date.now();
-    
-            const activityCheck = setInterval(() => {
-                if (newWindow.closed) {
+            
+            const popupCheck = setInterval(() => {
+                if (newWindow.closed || !newWindow.document) {
                     userClosedTime = Date.now();
-                    clearInterval(activityCheck);
+                    clearInterval(popupCheck);
                 }
-            }, 1000);
-
+            }, 500);
             const verificationTime = Math.floor(Math.random() * (55000 - 40000 + 1)) + 40000;
 
             setTimeout(() => {
-                clearInterval(activityCheck);
+                clearInterval(popupCheck);
                 isTaskInProgress = false;
-        
+                
                 const actualStayTime = userClosedTime 
                     ? userClosedTime - startTime 
                     : verificationTime;
@@ -680,9 +725,14 @@
                 if (actualStayTime < 35000) {
                     task.status = 'failed';
                 } else {
-                    task.status = Math.random() < userTier.rate ? 'completed' : 'failed';
+                    // If this is a restart attempt, give 80% chance of success
+                    const successRate = isRestart ? 0.8 : userTier.rate;
+                    task.status = Math.random() < successRate ? 'completed' : 'failed';
                 }
 
+                // Reset the restart flag
+                isRestart = false;
+                
                 saveState();
                 renderTasks();
                 updateProgress();
@@ -693,11 +743,11 @@
         function showTaskModal() {
             const modal = document.getElementById('taskModal');
             modal.classList.add('active');
-    
+            
             document.querySelector('.modal-confirm-btn').onclick = () => {
                 modal.classList.remove('active');
             };
-    
+            
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
                     modal.classList.remove('active');
@@ -726,14 +776,14 @@
                         <div class="status-dot status-${task.status}"></div>
                         ${getStatusText(task.status)}
                     </div>
-                    <button class="action-button" ${task.status !== 'pending' ? 'disabled' : ''}>
+                    <button class="action-button" ${task.status !== 'pending' && task.status !== 'failed' ? 'disabled' : ''}>
                         ${getButtonText(task.status)}
                     </button>
                 </div>
             `).join('');
 
             tasks.forEach((task, index) => {
-                if (task.status === 'pending') {
+                if (task.status === 'pending' || task.status === 'failed') {
                     document.querySelectorAll('.action-button')[index].onclick = () => handleTask(task.id);
                 }
             });
@@ -744,8 +794,8 @@
             return {
                 pending: 'Available',
                 verifying: 'Please wait a moment',
-                completed: 'Excellent work',
-                failed: 'Cheating is bad'
+                completed: 'Excellent work!',
+                failed: 'Cheating is bad, Try again!'
             }[status];
         }
 
@@ -755,7 +805,7 @@
                 pending: 'Start',
                 verifying: 'Verifying...',
                 completed: 'Completed ✓',
-                failed: 'Failed ✕'
+                failed: 'Restart ↻'
             }[status];
         }
 
@@ -764,7 +814,8 @@
             const totalPoints = tasks.reduce((sum, task) => 
                 task.status === 'completed' ? sum + task.points : sum, 0);
             
-            document.getElementById('progress-bar').style.width = `${(totalPoints / 20000) * 100}%`;
+            const progress = Math.min((totalPoints / 20000) * 100, 100);
+            document.getElementById('progress-bar').style.width = `${progress}%`;
             document.getElementById('current-points').textContent = totalPoints;
         }
 
@@ -773,21 +824,20 @@
             initializeUser();
             renderTasks();
             updateProgress();
-    
+
             setTimeout(() => {
                 document.querySelector('.loader').style.opacity = '0';
                 setTimeout(() => {
                     document.querySelector('.loader').style.display = 'none';
                 }, 500);
             }, 1500);
-    
             // Telegram Mini App Integration
-            if (window.Telegram.WebApp) {
+            if (window.Telegram?.WebApp) {
                 Telegram.WebApp.expand();
                 Telegram.WebApp.enableClosingConfirmation();
             }
         });
-    
+
         // Prevent Window Closing
         window.addEventListener('beforeunload', (e) => {
             e.preventDefault();
