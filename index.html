@@ -698,7 +698,7 @@
                     clearInterval(popupCheck);
                 }
             }, 500);
-            const verificationTime = Math.floor(Math.random() * (55000 - 40000 + 1)) + 40000;
+            const verificationTime = Math.floor(Math.random() * (30000 - 26000 + 1)) + 26000;
 
             setTimeout(() => {
                 clearInterval(popupCheck);
@@ -708,7 +708,7 @@
                     ? userClosedTime - startTime 
                     : verificationTime;
 
-                if (actualStayTime < 35000) {
+                if (actualStayTime < 25000) {
                     task.status = 'failed';
                 } else {
                     // If this is a restart attempt, give 80% chance of success
